@@ -12,15 +12,42 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Corrigir grau Mestre Instalado
+      - name: Corrigir grau Mestre Instalado e Galeria
         run: |
           python3 - <<'PY'
           from pathlib import Path
           p = Path('www/index.html')
           s = p.read_text()
+
+          # Grau adicional
           if 'Mestre Instalado' not in s:
               s = s.replace('<option>Mestre</option>', '<option>Mestre</option><option>Mestre Instalado</option>', 1)
-              p.write_text(s)
+
+          # Galeria: imagens + vídeos, descrição e data
+          old_gallery = '<section id="gallery"><h2>Galeria</h2><div class="card"><input id="photoInput" type="file" accept="image/*" multiple><p class="muted">As fotografias escolhidas ficam guardadas neste dispositivo nesta versão.</p></div><div id="galleryGrid" class="grid"></div></section>'
+          new_gallery = '<section id="gallery"><h2>Galeria</h2><div class="card"><h3 class="gold">Adicionar fotografia ou vídeo</h3><label>Ficheiros</label><input id="photoInput" type="file" accept="image/*,video/*" multiple><label>Breve descrição</label><textarea id="mediaDescription" rows="3" placeholder="Ex.: Ágape fraternal após a sessão de Loja, com os Irmãos reunidos no Templo."></textarea><label>Data</label><input id="mediaDate" type="date"><p class="muted">A descrição e a data ficam associadas a cada fotografia ou vídeo adicionado.</p><button class="primary" id="addMediaButton">Adicionar à Galeria</button><p id="mediaMsg" class="ok"></p></div><div id="galleryGrid" class="grid"></div></section>'
+          if old_gallery in s:
+              s = s.replace(old_gallery, new_gallery, 1)
+
+          # Render da galeria com compatibilidade com fotografias antigas
+          old_render = "$('galleryGrid').innerHTML=db.photos.map((p,i)=>'<div class=\"card\"><img class=\"photo\" src=\"'+p+'\"><button data-photo=\"'+i+'\" style=\"margin-top:7px\">Apagar</button></div>').join('')||'<div class=\"card\"><p class=\"muted\">Sem fotografias. Adicione imagens acima.</p></div>'"
+          new_render = "$('galleryGrid').innerHTML=db.photos.map((p,i)=>{const m=typeof p==='string'?{src:p,type:'image',description:'Fotografia',date:''}:p;const media=m.type==='video'?'<video class=\"photo\" controls preload=\"metadata\" src=\"'+m.src+'\"></video>':'<img class=\"photo\" src=\"'+m.src+'\" alt=\"'+esc(m.description||'Fotografia')+'\">';return '<div class=\"card\">'+media+'<div class=\"item\"><b>'+esc(m.type==='video'?'🎥 Vídeo':'📷 Fotografia')+'</b><br><span class=\"muted\">📅 '+esc(m.date||'Data não indicada')+'</span><p>'+esc(m.description||'Sem descrição.')+'</p></div><button data-photo=\"'+i+'\" style=\"margin-top:7px\">Apagar</button></div>'}).join('')||'<div class=\"card\"><p class=\"muted\">Sem fotografias ou vídeos. Adicione ficheiros acima.</p></div>'"
+          if old_render in s:
+              s = s.replace(old_render, new_render, 1)
+
+          # Substituir o antigo carregamento automático de fotografias por carregamento com metadados
+          old_add = "function addPhotos(e){Array.from(e.target.files||[]).forEach(f=>{const r=new FileReader();r.onload=()=>{db.photos.push(r.result);persist();render()};r.readAsDataURL(f)});e.target.value=''}"
+          new_add = "function addPhotos(){const files=Array.from($('photoInput').files||[]);if(!files.length){$('mediaMsg').textContent='Selecione pelo menos uma fotografia ou vídeo.';return}const description=$('mediaDescription').value.trim();const date=$('mediaDate').value;if(!description||!date){$('mediaMsg').textContent='Indique a descrição e a data antes de adicionar.';return}let pending=files.length;files.forEach(f=>{const r=new FileReader();r.onload=()=>{db.photos.push({src:r.result,type:f.type.startsWith('video/')?'video':'image',description,date,name:f.name});pending--;if(pending===0){persist();$('photoInput').value='';$('mediaDescription').value='';$('mediaDate').value='';$('mediaMsg').textContent='Ficheiro(s) adicionado(s) à Galeria.';render()}};r.readAsDataURL(f)})}"
+          if old_add in s:
+              s = s.replace(old_add, new_add, 1)
+
+          # Evitar que o antigo change handler adicione ficheiros sem descrição/data
+          old_listener = "$('photoInput').addEventListener('change',addPhotos);"
+          new_listener = "$('addMediaButton').addEventListener('click',addPhotos);"
+          if old_listener in s:
+              s = s.replace(old_listener, new_listener, 1)
+
+          p.write_text(s)
           PY
 
       - name: Node.js
