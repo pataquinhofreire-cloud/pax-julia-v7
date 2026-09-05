@@ -36,7 +36,7 @@ jobs:
         working-directory: android
         run: |
           STORE_PASSWORD=$(openssl rand -hex 24)
-          KEY_PASSWORD=$(openssl rand -hex 24)
+          KEY_PASSWORD="$STORE_PASSWORD"
           keytool -genkeypair -v -keystore paxjulia-release.jks -alias paxjulia -keyalg RSA -keysize 2048 -validity 3650 -storepass "$STORE_PASSWORD" -keypass "$KEY_PASSWORD" -dname "CN=PAX JULIA, OU=Loja 105, O=PAX JULIA, L=Beja, ST=Beja, C=PT"
           export STORE_PASSWORD KEY_PASSWORD
           python3 - <<'PY'
