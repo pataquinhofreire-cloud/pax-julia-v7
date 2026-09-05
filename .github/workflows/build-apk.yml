@@ -1,4 +1,4 @@
-name: Construir APK PAX JULIA V7
+name: Construir APK PAX JULIA V8
 
 on:
   push:
@@ -32,13 +32,39 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Compilar APK Debug
+      - name: Criar chave de assinatura e configurar release
         working-directory: android
-        run: ./gradlew assembleDebug --stacktrace
+        run: |
+          STORE_PASSWORD=$(openssl rand -hex 24)
+          KEY_PASSWORD=$(openssl rand -hex 24)
+          keytool -genkeypair -v -keystore paxjulia-release.jks -alias paxjulia -keyalg RSA -keysize 2048 -validity 3650 -storepass "$STORE_PASSWORD" -keypass "$KEY_PASSWORD" -dname "CN=PAX JULIA, OU=Loja 105, O=PAX JULIA, L=Beja, ST=Beja, C=PT"
+          export STORE_PASSWORD KEY_PASSWORD
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path('app/build.gradle')
+          s = p.read_text()
+          store = os.environ['STORE_PASSWORD']
+          key = os.environ['KEY_PASSWORD']
+          signing = f'''android {{\n    signingConfigs {{\n        release {{\n            storeFile file("../paxjulia-release.jks")\n            storePassword "{store}"\n            keyAlias "paxjulia"\n            keyPassword "{key}"\n        }}\n    }}'''
+          s = s.replace('android {', signing, 1)
+          s = s.replace('buildTypes {\n        release {', 'buildTypes {\n        release {\n            signingConfig signingConfigs.release', 1)
+          p.write_text(s)
+          PY
+
+      - name: Compilar APK Release assinado
+        working-directory: android
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Verificar assinatura do APK
+        working-directory: android
+        run: |
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose app/build/outputs/apk/release/app-release.apk
 
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: PAX-JULIA-V7-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: PAX-JULIA-V8-APK-ASSINADO
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
