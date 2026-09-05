@@ -68,3 +68,5 @@ jobs:
           name: PAX-JULIA-V8-APK-ASSINADO
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+
+# build trigger: contacto irmaos
