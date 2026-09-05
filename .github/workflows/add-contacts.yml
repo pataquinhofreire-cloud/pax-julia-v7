@@ -1,0 +1,52 @@
+name: Corrigir contactos dos Irmãos
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Adicionar campos de contacto aos Irmãos
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('www/index.html')
+          s=p.read_text()
+          old='''<label>Grau</label><select id="brotherDegree"><option>Aprendiz</option><option>Companheiro</option><option>Mestre</option></select><label>Data de nascimento</label><input id="brotherBirthday" type="date">'''
+          new='''<label>Grau</label><select id="brotherDegree"><option>Aprendiz</option><option>Companheiro</option><option>Mestre</option></select><label>Telemóvel</label><input id="brotherPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="9xx xxx xxx"><label>Email</label><input id="brotherEmail" type="email" autocomplete="email" placeholder="nome@email.pt"><label>Data de nascimento</label><input id="brotherBirthday" type="date">'''
+          if old not in s: raise SystemExit('Bloco do formulário não encontrado')
+          s=s.replace(old,new,1)
+          old='''<span class="muted">'+esc(x.b.role)+' · '+esc(x.b.degree)+(x.b.birthday?' · 🎂 '+esc(birthdayDisplay(x.b)):'')+'</span>'''
+          new='''<span class="muted">'+esc(x.b.role)+' · '+esc(x.b.degree)+(x.b.birthday?' · 🎂 '+esc(birthdayDisplay(x.b)):'')+(x.b.phone?' · 📱 '+esc(x.b.phone):'')+(x.b.email?' · ✉️ '+esc(x.b.email):'')+'</span>'''
+          if old not in s: raise SystemExit('Render da lista de Irmãos não encontrado')
+          s=s.replace(old,new,1)
+          old='''$('brotherDegree').value=b.degree||'Aprendiz';$('brotherBirthday').value=/^\\d{4}-\\d{2}-\\d{2}$/.test(b.birthday||'')?b.birthday:'';'''
+          new='''$('brotherDegree').value=b.degree||'Aprendiz';$('brotherPhone').value=b.phone||'';$('brotherEmail').value=b.email||'';$('brotherBirthday').value=/^\\d{4}-\\d{2}-\\d{2}$/.test(b.birthday||'')?b.birthday:'';'''
+          if old not in s: raise SystemExit('Bloco de edição não encontrado')
+          s=s.replace(old,new,1)
+          old='''const data={name,role:$('brotherRole').value.trim()||'—',degree:$('brotherDegree').value,birthday:$('brotherBirthday').value||''};'''
+          new='''const data={name,role:$('brotherRole').value.trim()||'—',degree:$('brotherDegree').value,phone:$('brotherPhone').value.trim(),email:$('brotherEmail').value.trim(),birthday:$('brotherBirthday').value||''};'''
+          if old not in s: raise SystemExit('Bloco de gravação não encontrado')
+          s=s.replace(old,new,1)
+          old='''$('brotherName').value='';$('brotherRole').value='';$('brotherDegree').value='Aprendiz';$('brotherBirthday').value='';'''
+          new='''$('brotherName').value='';$('brotherRole').value='';$('brotherDegree').value='Aprendiz';$('brotherPhone').value='';$('brotherEmail').value='';$('brotherBirthday').value='';'''
+          if old not in s: raise SystemExit('Reset do formulário não encontrado')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+
+      - name: Commit alteração
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add www/index.html
+          git diff --cached --quiet || git commit -m "V8 — campos telemóvel e email nos Irmãos"
+          git push
