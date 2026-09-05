@@ -12,6 +12,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Corrigir grau Mestre Instalado
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('www/index.html')
+          s = p.read_text()
+          if 'Mestre Instalado' not in s:
+              s = s.replace('<option>Mestre</option>', '<option>Mestre</option><option>Mestre Instalado</option>', 1)
+              p.write_text(s)
+          PY
+
       - name: Node.js
         uses: actions/setup-node@v4
         with:
@@ -68,5 +79,3 @@ jobs:
           name: PAX-JULIA-V8-APK-ASSINADO
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
-
-# build trigger: contacto irmaos
