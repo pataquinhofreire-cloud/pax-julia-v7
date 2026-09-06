@@ -1,0 +1,117 @@
+name: PAX JULIA V8 FINAL
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Corrigir e consolidar V8
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('www/index.html')
+          s=p.read_text()
+
+          # Grau Mestre Instalado
+          if 'Mestre Instalado' not in s:
+              s=s.replace('<option>Mestre</option>','<option>Mestre</option><option>Mestre Instalado</option>',1)
+
+          # Galeria V8
+          old_gallery='<section id="gallery"><h2>Galeria</h2><div class="card"><input id="photoInput" type="file" accept="image/*" multiple><p class="muted">As fotografias escolhidas ficam guardadas neste dispositivo nesta versão.</p></div><div id="galleryGrid" class="grid"></div></section>'
+          new_gallery='<section id="gallery"><h2>Galeria</h2><div class="card"><h3 class="gold">Adicionar fotografia ou vídeo</h3><label>Ficheiros</label><input id="photoInput" type="file" accept="image/*,video/*" multiple><label>Breve descrição</label><textarea id="mediaDescription" rows="3" placeholder="Ex.: Ágape fraternal após a sessão de Loja."></textarea><label>Data</label><input id="mediaDate" type="date"><button class="primary" id="addMediaButton" type="button">Adicionar à Galeria</button><p id="mediaMsg" class="ok"></p></div><div id="galleryGrid" class="grid"></div></section>'
+          if old_gallery in s:s=s.replace(old_gallery,new_gallery,1)
+          old_render="$('galleryGrid').innerHTML=db.photos.map((p,i)=>'<div class=\"card\"><img class=\"photo\" src=\"'+p+'\"><button data-photo=\"'+i+'\" style=\"margin-top:7px\">Apagar</button></div>').join('')||'<div class=\"card\"><p class=\"muted\">Sem fotografias. Adicione imagens acima.</p></div>'"
+          new_render="$('galleryGrid').innerHTML=db.photos.map((p,i)=>{const m=typeof p==='string'?{src:p,type:'image',description:'Fotografia',date:''}:p;const media=m.type==='video'?'<video class=\"photo\" controls preload=\"metadata\" src=\"'+m.src+'\"></video>':'<img class=\"photo\" src=\"'+m.src+'\" alt=\"'+esc(m.description||'Fotografia')+'\">';return '<div class=\"card\">'+media+'<div class=\"item\"><b>'+esc(m.type==='video'?'🎥 Vídeo':'📷 Fotografia')+'</b><br><span class=\"muted\">📅 '+esc(m.date||'Data não indicada')+'</span><p>'+esc(m.description||'Sem descrição.')+'</p></div><button data-photo=\"'+i+'\">Apagar</button></div>'}).join('')||'<div class=\"card\"><p class=\"muted\">Sem fotografias ou vídeos. Adicione ficheiros acima.</p></div>'"
+          if old_render in s:s=s.replace(old_render,new_render,1)
+          old_add="function addPhotos(e){Array.from(e.target.files||[]).forEach(f=>{const r=new FileReader();r.onload=()=>{db.photos.push(r.result);persist();render()};r.readAsDataURL(f)});e.target.value=''}"
+          new_add="function addPhotos(){const files=Array.from($('photoInput').files||[]);if(!files.length){$('mediaMsg').textContent='Selecione pelo menos um ficheiro.';return}const description=$('mediaDescription').value.trim(),date=$('mediaDate').value;if(!description||!date){$('mediaMsg').textContent='Indique descrição e data.';return}let n=files.length;files.forEach(f=>{const r=new FileReader();r.onload=()=>{db.photos.push({src:r.result,type:f.type.startsWith('video/')?'video':'image',description,date,name:f.name});if(--n===0){persist();$('photoInput').value='';$('mediaDescription').value='';$('mediaDate').value='';$('mediaMsg').textContent='Adicionado à Galeria.';render()}};r.readAsDataURL(f)})}"
+          if old_add in s:s=s.replace(old_add,new_add,1)
+          s=s.replace("$('photoInput').addEventListener('change',addPhotos);","$('addMediaButton').addEventListener('click',addPhotos);",1)
+
+          # Vigilantes: replace old simple section if present; otherwise repair current enhanced navigation.
+          old_vig=re.search(r'<section id="vigilantes">.*?</section>',s,re.S)
+          if old_vig:
+              section='''<section id="vigilantes"><h2>Área dos Vigilantes</h2><div class="card"><div class="actions"><button type="button" class="primary" onclick="showVigPage('first')">1.º Vigilante · Companheiros</button><button type="button" class="secondary" onclick="showVigPage('second')">2.º Vigilante · Aprendizes</button></div></div><div id="vigFirst" class="vig-page" style="display:block"><div class="grid"><div class="card"><h3 class="gold">1.º Vigilante</h3><span class="tag">Responsável pelos Companheiros</span><p class="muted">Obreiros sob acompanhamento:</p><div id="firstMembers"></div><label>Adicionar Companheiro</label><select id="firstMemberSelect"></select><button type="button" class="primary" id="firstAssign">Atribuir responsabilidade</button></div><div class="card"><h3>Chat directo</h3><select id="firstChatTo"></select><div id="firstChatMessages"></div><textarea id="firstChatText" placeholder="Mensagem directa..."></textarea><button type="button" class="primary" id="firstChatSend">Enviar mensagem</button></div></div><div class="card"><h3 class="gold">Trabalhos dos Companheiros</h3><div class="grid"><div><label>Obreiro</label><select id="firstWorkBrother"></select><label>Data</label><input id="firstWorkDate" type="date"><label>Tema</label><input id="firstWorkTheme" placeholder="Tema do trabalho"><label>Estado</label><select id="firstWorkStatus"><option>Apresentado</option><option>A apresentar</option></select><label>Ligação à Biblioteca da Loja</label><input id="firstWorkLibrary" placeholder="Livro / referência / documento"><label>Descrição</label><textarea id="firstWorkDesc" rows="3"></textarea><button type="button" class="primary" id="firstWorkSave">Registar trabalho</button></div><div id="firstWorks"></div></div></div></div><div id="vigSecond" class="vig-page" style="display:none"><div class="grid"><div class="card"><h3 class="gold">2.º Vigilante</h3><span class="tag">Responsável pelos Aprendizes</span><p class="muted">Obreiros sob acompanhamento:</p><div id="secondMembers"></div><label>Adicionar Aprendiz</label><select id="secondMemberSelect"></select><button type="button" class="primary" id="secondAssign">Atribuir responsabilidade</button></div><div class="card"><h3>Chat directo</h3><select id="secondChatTo"></select><div id="secondChatMessages"></div><textarea id="secondChatText" placeholder="Mensagem directa..."></textarea><button type="button" class="primary" id="secondChatSend">Enviar mensagem</button></div></div><div class="card"><h3 class="gold">Trabalhos dos Aprendizes</h3><div class="grid"><div><label>Obreiro</label><select id="secondWorkBrother"></select><label>Data</label><input id="secondWorkDate" type="date"><label>Tema</label><input id="secondWorkTheme" placeholder="Tema do trabalho"><label>Estado</label><select id="secondWorkStatus"><option>Apresentado</option><option>A apresentar</option></select><label>Ligação à Biblioteca da Loja</label><input id="secondWorkLibrary" placeholder="Livro / referência / documento"><label>Descrição</label><textarea id="secondWorkDesc" rows="3"></textarea><button type="button" class="primary" id="secondWorkSave">Registar trabalho</button></div><div id="secondWorks"></div></div></div></div></section>'''
+              s=s[:old_vig.start()]+section+s[old_vig.end():]
+
+          marker="const KEY='paxjulia_v7';"
+          logic='''function showVigPage(which){var a=document.getElementById('vigFirst'),b=document.getElementById('vigSecond');if(!a||!b)return;if(which==='second'){a.style.display='none';b.style.display='block';}else{a.style.display='block';b.style.display='none';}window.scrollTo(0,0)} function vigMembers(k){if(!Array.isArray(db.vigilantes[k].members))db.vigilantes[k].members=[];return db.vigilantes[k].members} function renderVigilantes(){["first","second"].forEach(k=>{var v=db.vigilantes[k],ids=vigMembers(k),members=ids.map(i=>db.brothers[i]).filter(Boolean),p=k==='first'?'first':'second';$(p+'Members').innerHTML=members.map(b=>'<div class="item"><b>'+esc(b.name)+'</b><br><span class="muted">'+esc(b.degree||'')+' · '+esc(b.role||'')+'</span></div>').join('')||'<p class="muted">Nenhum obreiro atribuído.</p>';var deg=k==='first'?'Companheiro':'Aprendiz',el=db.brothers.map((b,i)=>({b:b,i:i})).filter(x=>x.b.degree===deg);$(p+'MemberSelect').innerHTML='<option value="">Selecionar...</option>'+el.map(x=>'<option value="'+x.i+'">'+esc(x.b.name)+'</option>').join('');$(p+'WorkBrother').innerHTML='<option value="">Selecionar...</option>'+members.map((b,i)=>'<option value="'+ids[i]+'">'+esc(b.name)+'</option>').join('');$(p+'ChatTo').innerHTML='<option value="">Selecionar...</option>'+members.map((b,i)=>'<option value="'+ids[i]+'">'+esc(b.name)+'</option>').join('');$(p+'Works').innerHTML=(v.works||[]).slice().reverse().map(w=>'<div class="item"><b>'+esc(w.theme)+'</b><br><span class="muted">📅 '+esc(w.date)+' · '+esc(w.status)+' · '+esc((db.brothers[w.brotherId]||{}).name||'Obreiro')+'</span><p>'+esc(w.description||'')+'</p><span class="tag">📚 '+esc(w.library||'Sem referência')+'</span></div>').join('')||'<p class="muted">Sem trabalhos registados.</p>';$(p+'ChatMessages').innerHTML=(v.chat||[]).slice().reverse().map(m=>'<div class="item"><b>'+esc(m.from)+'</b> → '+esc(m.to)+'<br>'+esc(m.text)+'<br><span class="muted">'+esc(m.date)+'</span></div>').join('')||'<p class="muted">Sem mensagens.</p>'})} function vigAssign(k){var p=k==='first'?'first':'second',id=$(p+'MemberSelect').value;if(id==='')return;var n=Number(id);if(!db.vigilantes[k].members.includes(n))db.vigilantes[k].members.push(n);persist();renderVigilantes()} function vigChat(k){var p=k==='first'?'first':'second',to=$(p+'ChatTo').value,text=$(p+'ChatText').value.trim();if(to===''||!text)return;var b=db.brothers[Number(to)];db.vigilantes[k].chat.push({from:sessionStorage.getItem('pax_login')||'Vigilante',to:b?b.name:'Obreiro',text:text,date:new Date().toLocaleString('pt-PT')});$(p+'ChatText').value='';persist();renderVigilantes()} function vigWork(k){var p=k==='first'?'first':'second',bid=$(p+'WorkBrother').value,date=$(p+'WorkDate').value,theme=$(p+'WorkTheme').value.trim(),status=$(p+'WorkStatus').value,library=$(p+'WorkLibrary').value.trim(),description=$(p+'WorkDesc').value.trim();if(bid===''||!date||!theme)return;db.vigilantes[k].works.push({brotherId:Number(bid),date:date,theme:theme,status:status,library:library,description:description});$(p+'WorkTheme').value='';$(p+'WorkLibrary').value='';$(p+'WorkDesc').value='';persist();renderVigilantes()}'''
+          if 'function showVigPage(' not in s:s=s.replace(marker,marker+logic,1)
+
+          init="if(!db.vigilantes)db.vigilantes={first:{members:[],chat:[],works:[]},second:{members:[],chat:[],works:[]}};['first','second'].forEach(function(k){db.vigilantes[k].members=Array.isArray(db.vigilantes[k].members)?db.vigilantes[k].members:[];db.vigilantes[k].chat=Array.isArray(db.vigilantes[k].chat)?db.vigilantes[k].chat:[];db.vigilantes[k].works=Array.isArray(db.vigilantes[k].works)?db.vigilantes[k].works:[]});"
+          if 'if(!db.vigilantes)' not in s:s=s.replace('if(!Array.isArray(db.brothers))db.brothers=[];','if(!Array.isArray(db.brothers))db.brothers=[];'+init,1)
+
+          # Remove old nested listener if present; direct function is intentionally used for Android WebView reliability.
+          s=re.sub(r"const vigNav=document\.getElementById\('vigilantes'\);vigNav\.addEventListener\('click',[\s\S]*?\}\);",'',s,count=1)
+          binds="$('firstAssign').addEventListener('click',()=>vigAssign('first'));$('secondAssign').addEventListener('click',()=>vigAssign('second'));$('firstChatSend').addEventListener('click',()=>vigChat('first'));$('secondChatSend').addEventListener('click',()=>vigChat('second'));$('firstWorkSave').addEventListener('click',()=>vigWork('first'));$('secondWorkSave').addEventListener('click',()=>vigWork('second'));"
+          if 'vigAssign(\'first\')' not in s:s=s.replace("if(sessionStorage.getItem('pax_login'))showApp();",binds+"if(sessionStorage.getItem('pax_login'))showApp();",1)
+          if "$('countB').textContent=db.brothers.length;" in s:s=s.replace("$('countB').textContent=db.brothers.length;","$('countB').textContent=db.brothers.length;renderVigilantes();",1)
+          p.write_text(s)
+          PY
+
+      - name: Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Criar projeto Android Capacitor
+        run: npx cap add android
+
+      - name: Sincronizar aplicação
+        run: npx cap sync android
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Criar assinatura Android
+        working-directory: android
+        run: |
+          STORE_PASSWORD=$(openssl rand -hex 24)
+          KEY_PASSWORD="$STORE_PASSWORD"
+          keytool -genkeypair -v -keystore paxjulia-release.jks -alias paxjulia -keyalg RSA -keysize 2048 -validity 3650 -storepass "$STORE_PASSWORD" -keypass "$KEY_PASSWORD" -dname "CN=PAX JULIA, OU=Loja 105, O=PAX JULIA, L=Beja, ST=Beja, C=PT"
+          export STORE_PASSWORD KEY_PASSWORD
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p=Path('app/build.gradle')
+          s=p.read_text()
+          signing=f'''android {{\n    signingConfigs {{\n        release {{\n            storeFile file("../paxjulia-release.jks")\n            storePassword "{os.environ['STORE_PASSWORD']}"\n            keyAlias "paxjulia"\n            keyPassword "{os.environ['KEY_PASSWORD']}"\n        }}\n    }}'''
+          s=s.replace('android {',signing,1)
+          s=s.replace('buildTypes {\n        release {','buildTypes {\n        release {\n            signingConfig signingConfigs.release',1)
+          p.write_text(s)
+          PY
+
+      - name: Compilar APK Release assinado
+        working-directory: android
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Verificar assinatura e integridade
+        working-directory: android
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose "$APK"
+          test -s "$APK"
+          sha256sum "$APK"
+
+      - name: Publicar APK V8 FINAL
+        uses: actions/upload-artifact@v4
+        with:
+          name: PAX-JULIA-V8-FINAL-APK
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          compression-level: 6
