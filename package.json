@@ -4,7 +4,8 @@
   "private": true,
   "description": "APP PAX JÚLIA n.º 105 — Oriente de Beja",
   "scripts": {
-    "build": "npx cap sync android"
+    "build": "npx cap sync android",
+    "postinstall": "node scripts/inject-management.js"
   },
   "dependencies": {
     "@capacitor/core": "latest",
